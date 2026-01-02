@@ -658,20 +658,38 @@ impl Config {
         }
     }
 
-    pub fn path<P: AsRef<Path>>(p: P) -> PathBuf {
-        #[cfg(any(target_os = "android", target_os = "ios"))]
+use std::path::{Path, PathBuf};
+use std::env;
+
+pub fn path<P: AsRef<Path>>(p: P) -> PathBuf {
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    {
+        let mut path: PathBuf = APP_DIR.read().unwrap().clone().into();
+        path.push(p);
+        return path;
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        #[cfg(not(target_os = "macos"))]
+        let org = "".to_owned();
+        #[cfg(target_os = "macos")]
+        let org = ORG.read().unwrap().clone();
+
+        #[cfg(not(target_os = "macos"))] // Windows / Linux
         {
-            let mut path: PathBuf = APP_DIR.read().unwrap().clone().into();
-            path.push(p);
+            // 获取 exe 当前目录
+            let mut path = env::current_exe()
+                .ok()                                     // 获取 exe 路径
+                .and_then(|p| p.parent().map(|p| p.to_path_buf())) // 取 exe 所在目录
+                .unwrap_or_else(|| ".".into());           // fallback 当前目录
+            path.push("config");                         // 子目录 config
+            path.push(p);                                // 原来的文件名
             return path;
         }
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+
+        #[cfg(target_os = "macos")] // 保留 macOS 原逻辑
         {
-            #[cfg(not(target_os = "macos"))]
-            let org = "".to_owned();
-            #[cfg(target_os = "macos")]
-            let org = ORG.read().unwrap().clone();
-            // /var/root for root
             if let Some(project) =
                 directories_next::ProjectDirs::from("", &org, &APP_NAME.read().unwrap())
             {
@@ -682,6 +700,8 @@ impl Config {
             "".into()
         }
     }
+}
+
 
     /// Get the log directory path.
     ///
